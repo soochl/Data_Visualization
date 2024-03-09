@@ -1,0 +1,221 @@
+---
+title: "hw02"
+output: html_document
+date: '2024-03-04'
+---
+
+#1. Damage from Storms
+
+```{r}
+storms_df <- read.csv("/Users/sooyeonchoi/GR5063/data/storms.csv")
+```
+
+```{r}
+library(ggplot2)
+library(sf)
+library(ggthemes)
+library(gapminder)
+library(dplyr)
+library(maps)
+library(tidyverse)
+```
+
+##a) State Level Choropleth Maps
+```{r}
+mon_damage <- storms_df %>%
+  group_by(STATE) %>% #group by state name
+  summarise(total_damage = sum(DAMAGE_PROPERTY_USD, na.rm = TRUE) + sum(DAMAGE_CROPS_USD, na.rm = TRUE))
+
+head(mon_damage)
+```
+
+```{r}
+us.states <- st_as_sf(maps::map("state", plot = FALSE, fill =TRUE))
+
+head(us.states)
+```
+
+```{r}
+us.states$ID <- toupper(us.states$ID)
+```
+
+```{r}
+merged_data <- merge(us.states, mon_damage, by.x = "ID", by.y = "STATE")
+
+head(merged_data)
+```
+
+```{r}
+state_mon_damage <- ggplot(data = merged_data) + geom_sf(aes(fill = total_damage), color = "white", size = 025) +
+  scale_fill_viridis_c() +
+  labs(title = "US State-Level Monetary Damage", fill = "Total Monetary Damage") +
+  theme_minimal()
+
+state_mon_damage
+```
+##b) County Choropleth Maps
+```{r}
+county_mon_damage <- storms_df %>%
+  filter(CZ_TYPE == "C") %>% # county-lv events
+  group_by(CZ_NAME) %>% #group by county name
+  summarise(total_damage = sum(DAMAGE_PROPERTY_USD, na.rm = TRUE) + sum(DAMAGE_CROPS_USD, na.rm = TRUE))
+
+head(county_mon_damage)
+```
+
+```{r}
+us.counties <- st_as_sf(maps::map("county", plot = FALSE, fill =TRUE))
+
+head(us.counties)
+```
+
+```{r}
+us.counties$ID <- toupper(us.counties$ID) 
+```
+```{r}
+us.counties$ID <- gsub(".*,", "", us.counties$ID) # county name alone by dropping state name
+
+head(us.counties)
+```
+
+```{r}
+county_merged_data <- merge(us.counties, county_mon_damage, by.x = "ID", by.y = "CZ_NAME")
+
+head(county_merged_data)
+```
+
+```{r}
+county_mon_damage <- ggplot(data = county_merged_data) + geom_sf(aes(fill = total_damage), color = "white", size = 0125) +
+  scale_fill_gradientn(colours=c("red", "purple2", "blue")) +
+  labs(title = "US County-Level Monetary Damage", fill = "Total Monetary Damage") +
+  theme_minimal()
+
+county_mon_damage
+```
+```{r}
+county_mon_damage <- county_mon_damage + theme(legend.position = "right") +
+  theme_map() +
+  theme(plot.title = element_text(hjust = 0.5, size = 20),
+        legend.title = element_text(size=5))
+
+county_mon_damage
+```
+
+##c) Density Map
+```{r}
+deaths_damage <- storms_df %>%
+  group_by(STATE) %>%
+  summarise(total_deaths = sum(DEATHS_DIRECT, na.rm = TRUE) + sum(DEATHS_INDIRECT, na.rm = TRUE))
+
+head(deaths_damage)
+```
+```{r}
+state_deaths <- sum(deaths_damage$total_deaths, na.rm=TRUE)
+
+head(state_deaths)
+```
+
+```{r}
+merged_deaths_data <- merge(us.states, deaths_damage, by.x = "ID", by.y = "STATE")
+
+head(merged_deaths_data)
+```
+```{r}
+merged_deaths_data <- mutate(merged_deaths_data, deaths_rate = total_deaths / state_deaths)
+
+head(merged_deaths_data)
+```
+
+```{r}
+state_deaths_damage <- ggplot(data = merged_deaths_data) + geom_sf(aes(fill = deaths_rate), color = "white", size = 0.25) +
+  scale_fill_viridis_c(
+    name = "total deaths (%)",
+    labels = scales::percent_format(accuracy = 1)
+  ) +
+  theme_minimal()
+
+state_deaths_damage
+```
+```{r}
+state_deaths_damage <- state_deaths_damage + theme(legend.position = "right") +
+  ggtitle("Proportion of US State-Level Storm-Caused Deaths") +
+  theme(plot.title = element_text(hjust = 0.5, size =20),
+        legend.title = element_text(size=10))
+
+state_deaths_damage
+```
+
+### I chose to create chropleth and density maps to visualize the monetary damage and death rates caused by storms across states in the US. I believe that a density map offers a more comprehensvie visual representation of the distribution of the stroms' destructive impacts, as it presents proportions rather than raw numeric figures. This approach enables easier comparisons of the severity of damage among different states.
+
+
+#2.
+
+```{r}
+library(devtools)
+
+devtools::install_github("rstudio/leaflet")
+
+library(leaflet)
+```
+
+##a) Interactive Map of Severe Weather Events
+```{r}
+severe_wth_events <- storms_df %>%
+  filter((DEATHS_DIRECT > 0 | DEATHS_INDIRECT > 0) & !is.na(BEGIN_LAT) & !is.na(BEGIN_LON)) # filtering df to show events resulting in at least one death & removing missing values
+```
+
+```{r}
+severe_wth_events <- severe_wth_events %>%
+  mutate(popup = paste(EVENT_TYPE,
+                       "<br>Year:", YEAR,
+                       "<br>Direct Deaths:", DEATHS_DIRECT,
+                       "<br>Indirect Deaths:", DEATHS_INDIRECT,
+                       "<br>Cause of flood:", FLOOD_CAUSE))
+```
+
+```{r}
+leaflet(data=severe_wth_events) %>%
+  addTiles() %>%
+  addMarkers(lat = ~BEGIN_LAT, lng = ~BEGIN_LON, popup = ~popup) %>%
+  setView(lng=-98, lat = 38, zoom = 4)
+```
+
+##b) Color by Type of Weather Event
+```{r}
+library(RColorBrewer)
+```
+
+```{r}
+pal <- colorFactor(
+  palette = c(
+  "Flood" = "blue",
+  "Lightning" = "yellow",
+  "Hail" = "white",
+  "Thunderstorm Wind" = "red",
+  "Heavy Rain" = "gray"),
+  domain = severe_wth_events$EVENT_TYPE
+  )
+```
+
+```{r}
+event_by_color <- leaflet(data=severe_wth_events) %>%
+  addTiles() %>%
+  addCircles(lat = ~BEGIN_LAT, lng = ~BEGIN_LON, popup = ~popup, color = ~pal(EVENT_TYPE)) %>%
+  setView(lng=-98, lat = 38, zoom = 4)
+
+event_by_color
+```
+
+##c) Cluster
+```{r}
+mclust <- leaflet(data=severe_wth_events) %>%
+  addTiles() %>%
+  addCircleMarkers(lat = ~BEGIN_LAT, lng = ~BEGIN_LON, popup = ~popup, color = ~pal(EVENT_TYPE),
+             clusterOptions = markerClusterOptions()) %>%
+  setView(lng=-98, lat = 38, zoom = 4)
+
+mclust
+```
+
+
+

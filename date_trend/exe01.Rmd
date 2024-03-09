@@ -1,0 +1,255 @@
+---
+title: "how01"
+output: html_document
+date: "2024-02-08"
+---
+
+```{r}
+data <- readRDS("/Users/sooyeonchoi/Documents/MA_QMSS/Spring2024/GR5063_DV/HCMST_couples.rds")
+
+head(data)
+```
+
+```{r}
+library(ggplot2)
+library(ggthemes)
+library(gapminder)
+library(dplyr)
+```
+
+
+# 1. Dating trends over time
+
+```{r}
+# creating function to simplify types of first-time meeting
+
+simplify_meeting_type <- function(meeting_type) {
+  if (meeting_type %in% c("Primary or Secondary school", "College")) {
+    return("School")
+  } else if (meeting_type %in% c("Met Online", "Internet Social Network", "Internet", "Internet Site", "Online Gaming", "Internet Dating or Phone App", "Internet Chat")) {
+    return("Online")
+  } else if (meeting_type %in% c("Volunteer Organization", "One-time Service Interaction", "Private Party", "Church", "Bar or Restaurant")) {
+    return("Social Gathering")
+  } else if (meeting_type %in% c("Work Neighbors",  "Business Trip")) {
+    return("Work-related")
+  } else if (meeting_type %in% c("Online")) {
+    return("Online")
+  } else {
+    return("Other")
+  }
+}
+```
+
+```{r}
+# create new dataframe for simplified ver. of meeting_type
+ 
+data$meeting_type_simplified <- sapply(data$meeting_type, simplify_meeting_type)
+```
+
+```{r}
+# remove NA from Q21A_Year
+data <- data[!is.na(data$Q21A_Year),]
+```
+```{r}
+# convert Q21A_Year to numeric variable
+data$Q21A_Year <- as.numeric(as.character(data$Q21A_Year))
+```
+
+```{r}
+# calculate frequency of meeting types over time
+
+meeting_type_freq <- data %>%
+  group_by(Q21A_Year, meeting_type_simplified) %>%
+  summarise(count = n()) %>%
+  ungroup()
+```
+
+```{r}
+# line plot
+ggplot(meeting_type_freq, aes(x = Q21A_Year, y = count, color = meeting_type_simplified)) +
+  geom_line() +
+  labs(title = "Frequency of Meeting Types Over Time", x = "year", y = "frequency", color = "meeting type") +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1")
+```
+
+```{r}
+# area plot
+ggplot(meeting_type_freq, aes(x = Q21A_Year, y = count, fill = meeting_type_simplified)) +
+  geom_area(position = "stack") +
+  labs(title = "Frequency of Meeting Types Over Years", x = "year", y = "frequency", fill = "meeting type") +
+  theme_minimal()
+```
+
+I initially created a line plot to capture trends over time and then transformed it into an area plot to display cumulative frequency stacked over time. I recommend using the area plot as it better emphasizes the overall distribution and composition of how the modes of meeting have changed over time, while the line plot is effective for showing individual trends. 
+
+In both plots, I used different colors to distinguish between different meeting types. I tried to ensure that the colors are easily distinguishable.
+For the line plot, I employed predefined color palettes to ensure better color distinction and aesthetic appeal.
+To effectively communicate the content of the plots, I provided titles and labeled the x-axis as "year" and the y-axis as "frequency".
+
+
+#2. Age is just a number
+
+```{r}
+ggplot(data, aes(x = ppage, y = Q9, color=ppgender)) + 
+  geom_point(size=2, shape = 21) +
+  geom_smooth(method=lm) +
+  labs(title = "Correlation of Ages by Gender", x="Respondent's Age", y="Partner's Age", color="Gender") +
+  annotate ("text", x = 35, y = 80, label = "Positive correlation \nbetween ages \n for both genders", color = "black", size = 3, fontface = "bold")
+```
+
+
+#3. Politics and Dating
+
+```{r}
+meeting_type_df <- data.frame(table(data$partyid7, data$meeting_type_simplified))
+colnames(meeting_type_df) <- c("Party", "Meeting_Type", "Count")
+```
+```{r}
+# remove the rows with zero counts
+meeting_type_df <- meeting_type_df[meeting_type_df$Count != 0,]
+```
+
+```{r}
+ggplot(meeting_type_df, aes(x = Party, y = Count, fill = Meeting_Type)) + 
+  geom_bar(stat = "identity", position = "stack") + 
+  labs(title = "Meeting Type Distribution by Political Affiliation", x = "Respondent's Political Affiliation", y = "Count", fill = "meeting type") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+relationship_dur_df <- data.frame(table(data$partyid7, data$w6_q12, data$duration))
+colnames(relationship_dur_df) <- c("Party", "Partner_Party", "Duration", "Count")
+```
+```{r}
+# remove the rows with zero counts
+relationship_dur_df <- relationship_dur_df[relationship_dur_df$Count != 0,]
+```
+
+```{r}
+ggplot(relationship_dur_df, aes(x = Party, y = Count, fill = Partner_Party)) +
+  geom_bar(stat = "identity", position = "dodge") + 
+  labs(title = "Relationship Duration by Political Affiliation",
+       x = "Respondent's Political Affiliation",
+       y = "Count",
+       fill = "Partner's Political Affiliation") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark1") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Initially, I created a bar chart to demonstrate how the mode of meeting varies depending on the respondent's political affiliation. However, this visualization does not seem to effectively illustrate the relative proportions of the different categories. Then, I generated a new data frame with the relationship duration and their political status. I recommend using the second plot as it has better visualization, capturing the relationship between the duration of the couples' relationships and their political affiliation. 
+
+
+#4. Your turn to choose
+
+```{r}
+summary(data$Q10)
+```
+
+
+```{r}
+# Q10: highest level of schooling that the partner has completed
+
+# create function to simplify the partner's academic background
+simplify_Q10 <- function(Q10) {
+  if (Q10 %in% c("Refused", "No formal education")) {
+    return("no formal education")
+  } else if (Q10 %in% c("1st-4th grade", "5th or 6th grade", "7th or 8th grade", "10th grade", "11th grade", "12th grade no diploma")) {
+    return("some basic education")
+  } else if (Q10 %in% c("HS graduate or GED")) {
+    return("highschool")
+  } else if (Q10 %in% c("some college, no degree", "Associate degree")) {
+    return("some college")
+  } else if (Q10 %in% c("Bachelor’s degree")) {
+    return("BA")
+  } else if (Q10 %in% c("Master’s degree")) {
+    return("MA")
+  } else if (Q10 %in% c("Professional or Doctorate degree")) {
+    return("PHD")
+  } else {
+    return("Other")
+  }
+}
+```
+
+```{r}
+# create a new dataframe
+data$edu_simplified <- sapply(data$Q10, simplify_Q10)
+```
+
+```{r}
+# bar chart
+ggplot(data = data, aes(x = ppgender)) +
+  geom_bar(aes(fill = factor(edu_simplified)), position = "dodge") +
+  labs(title = "Gender and Partner's Academic Background", x = "Gender", y = "Count", fill = "partner's last education") +
+  theme_minimal()
+```
+
+```{r}
+# box chart
+ggplot(data = data, aes(x = edu_simplified, y=ppage)) +
+  geom_boxplot(aes(fill=ppgender)) +
+  coord_flip() + 
+  labs(title = "Partner's Academic Background by Age and Gender", x = "Partner's Last Education", y = "Age", fill = "Gender") +
+  theme_minimal()
+```
+
+I became intrigued by the impact of a partner's academic background and generated a bar chart to explore potential gender disparities in completed education levels among their partners. Then, I created a box chart that incorporates age data alongside gender. I recommend using the box chart since it not only offers a more comprehensive representation but better highlights gender differences in  partner's academic backgrounds.
+
+
+#5. Make two plots interactive
+
+```{r}
+library(plotly)
+```
+
+```{r}
+ages_scatter <- ggplot(data, aes(x = ppage, y = Q9, color=ppgender)) + 
+  geom_point(size=2, shape = 21, alpha = 0.6) +
+  geom_smooth(method=lm, color = "black") +
+  labs(title = "Correlation of Ages by Gender", x="Respondent's Age", y="Partner's Age", color="Gender") +
+  theme(legend.position = "bottom")
+```
+```{r}
+ggplotly(ages_scatter, tooltip = c("ppage", "Q9", "ppgender"))
+```
+
+```{r}
+edu_box <- ggplot(data = data, aes(x = edu_simplified, y=ppage)) +
+  geom_boxplot(aes(fill=ppgender)) +
+  coord_flip() + 
+  labs(title = "Partner's Educational Status by Age and Gender", x = "partner's highest completed education", y = "Age", fill = "gender") +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+```
+```{r}
+ggplotly(edu_box)
+```
+
+Interactivity enables readers to explore the data points in detail, providing exact values or labels. It allows readers to compare variables more effectively. For example, in the scatter plot, readers can hover over different points to compare respondent ages with their partners' across gender categories. Also, interactive plots elevate the presentation of findings. For instance, the simplified interactive box plot captivates readers with its presentation, rendering results more engaging and memorable.   
+
+
+#6. Data Table
+
+```{r}
+new_data <- data[, c("ppage", "ppgender", "Q9", "Q4", "Q32", "Q34","w6_sex_frequency", "w6_otherdate")]
+names(new_data) <- c ("age", "gender", "partner's age", "partner's gender", "met online", "relationship quality", "sex frequency", "experience of cheating")
+```
+
+```{r}
+library(DT)
+```
+
+```{r}
+new_data %>%
+  datatable(
+    rownames = FALSE,
+    filter = list(position = "top"),
+    options = list(language = list(sSearch = "Filter:"))
+  )
+```
+
+I incorporated demographic information on both respondents and their partners, specifically gender and age. Also, I included data, asking whether the respondents initially met their partners online. Then, I delved into aspects exploring the quality of their relationships, such as direct descriptions from respondents about their relationship quality, frequency of sexual activity, and experiences of infidelity within the past year. These information may serve as valuable insights for examining potential correlations between the platform of initial engagement and subsequent quality of the relationships.
+
